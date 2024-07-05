@@ -17,7 +17,7 @@ import torch.nn as nn
 import torch.utils.checkpoint
 from torch.nn.init import trunc_normal_
 
-from dinov2.layers import Mlp, PatchEmbed, SwiGLUFFNFused, MemEffAttention, NestedTensorBlock as Block
+from ..layers import Mlp, PatchEmbed, SwiGLUFFNFused, MemEffAttention, NestedTensorBlock as Block
 
 
 logger = logging.getLogger("dinov2")
@@ -328,6 +328,18 @@ class DinoVisionTransformer(nn.Module):
         else:
             return self.head(ret["x_norm_clstoken"])
 
+    def get_attention_weights_dict(self, x, masks=None):
+        attention_weights = {}
+
+        if isinstance(x, list):
+            return self.forward_features_list(x, masks)
+
+        x = self.prepare_tokens_with_masks(x, masks)
+
+        for idx, blk in enumerate(self.blocks):
+            x, head_wise_attn_weights = blk.forward_all(x) # B, Head, W, H
+            attention_weights["layer" + str(idx)] = torch.mean(head_wise_attn_weights, dim=1)
+        return attention_weights
 
 def init_weights_vit_timm(module: nn.Module, name: str = ""):
     """ViT weight initialization, original timm impl (for reproducibility)"""

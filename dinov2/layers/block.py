@@ -113,6 +113,17 @@ class Block(nn.Module):
             x = x + ffn_residual_func(x)
         return x
 
+    def forward_all(self, x: Tensor) -> Tensor:
+        def ffn_residual_func(x: Tensor) -> Tensor:
+            return self.ls2(self.mlp(self.norm2(x)))
+
+        if self.training:
+            raise AssertionError("forward_all is not supported during training")
+        else:
+            x, attention_weights = self.attn.forward_all(self.norm1(x))
+            x = x + self.ls1(x)
+            x = x + ffn_residual_func(x)
+        return x, attention_weights
 
 def drop_add_residual_stochastic_depth(
     x: Tensor,
@@ -256,5 +267,11 @@ class NestedTensorBlock(Block):
             if not XFORMERS_AVAILABLE:
                 raise AssertionError("xFormers is required for using nested tensors")
             return self.forward_nested(x_or_x_list)
+        else:
+            raise AssertionError
+
+    def forward_all(self, x_or_x_list):
+        if isinstance(x_or_x_list, Tensor):
+            return super().forward_all(x_or_x_list)
         else:
             raise AssertionError
